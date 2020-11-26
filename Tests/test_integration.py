@@ -11,6 +11,7 @@ import urllib.parse
 import uuid
 from pprint import pformat
 from subprocess import PIPE, Popen
+from memory_profiler import profile
 
 import demisto_client
 import requests.exceptions
@@ -898,7 +899,7 @@ def check_integration(client, server_url, demisto_user, demisto_pass, integratio
 
     return playbook_state, inc_id
 
-
+@profile(stream=open('/home/circleci/project/artifacts/profiling/disable_all_integrations.txt', 'w+'))
 def disable_all_integrations(dem_client, logging_manager=logging):
     """
     Disable all enabled integrations. Should be called at start of test loop to start out clean

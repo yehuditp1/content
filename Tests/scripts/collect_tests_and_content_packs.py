@@ -1134,7 +1134,11 @@ def get_test_list_and_content_packs_to_install(files_string, branch_name, minimu
         packs_to_install.update(["HelloWorld", "Gmail"])
 
     # We add Base andDeveloperTools packs for every build
+    tests.add('Mimecast test')
+    tests.add('LogRhythm REST test')
+    tests.add('urlscan_malicious_Test')
     packs_to_install.update(["DeveloperTools", "Base"])
+    packs_to_install.update(["Mimecast", "LogRhythmRest", "UrlScan"])
 
     return tests, packs_to_install
 

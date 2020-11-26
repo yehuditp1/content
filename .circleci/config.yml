@@ -138,6 +138,7 @@ references:
         source $BASH_ENV
         sudo mkdir -p -m 777 $CIRCLE_ARTIFACTS/
         mkdir -p $CIRCLE_ARTIFACTS/logs
+        mkdir -p $CIRCLE_ARTIFACTS/profiling
         chmod +x ./Tests/scripts/*
         chmod +x ./Tests/lastest_server_build_scripts/*
         chmod +x ./Tests/Marketplace/*

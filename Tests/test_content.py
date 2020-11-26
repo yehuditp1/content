@@ -12,6 +12,7 @@ import subprocess
 from time import sleep
 import datetime
 from distutils.version import LooseVersion
+from memory_profiler import profile
 from typing import Union, Any
 
 import pytz
@@ -585,7 +586,7 @@ def load_conf_files(conf_path, secret_conf_path):
 
     return conf, secret_conf
 
-
+@profile(stream=open('/home/circleci/project/artifacts/profiling/run_test_scenario.txt', 'w+'))
 def run_test_scenario(tests_queue, tests_settings, t, proxy, default_test_timeout, skipped_tests_conf,
                       nightly_integrations, skipped_integrations_conf, skipped_integration, is_nightly, filtered_tests,
                       skipped_tests, secret_params, failed_playbooks, playbook_skipped_integration,
@@ -756,7 +757,7 @@ def get_json_file(path):
     with open(path, 'r') as json_file:
         return json.loads(json_file.read())
 
-
+@profile(stream=open('/home/circleci/project/artifacts/profiling/execute_testing.txt', 'w+'))
 def execute_testing(tests_settings,
                     server_ip,
                     mockable_tests_names,
@@ -969,6 +970,7 @@ def get_all_tests(tests_settings):
     return all_tests
 
 
+@profile(stream=open('/home/circleci/project/artifacts/profiling/manage_tests.txt', 'w+'))
 def manage_tests(tests_settings):
     """
     This function manages the execution of Demisto's tests.
