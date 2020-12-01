@@ -153,11 +153,11 @@ def download_packs_from_gcp(storage_bucket, gcp_path, destination_path, circle_b
                 logging.info(f'Downloading pack from GCP: {pack.name}')
                 executor_submit(executor, download_path, blob)
                 sleep(1)
-                if os.path.exists('/home/runner/work/content-private/content-private/content/artifacts/'):
+                if os.path.exists('/home/runner/work/content-private/content-private/content/temp_artifacts/'):
                     logging.info(f"Copying pack from {download_path} to /home/runner/work/content-private/"
-                                 f"content-private/content/artifacts/packs/{pack.name}.zip")
+                                 f"content-private/content/temp_artifacts/packs/{pack.name}.zip")
                     shutil.copy(download_path,
-                                f'/home/runner/work/content-private/content-private/content/artifacts/'
+                                f'/home/runner/work/content-private/content-private/content/temp_artifacts/'
                                 f'packs/{pack.name}.zip')
             else:
                 logging.warning(f'Did not find a pack to download with the prefix: {pack_prefix}')
@@ -218,7 +218,7 @@ def main():
     remove_test_playbooks = option.remove_test_playbooks
     private_build = option.private
     if private_build:
-        packs_dir = '/home/runner/work/content-private/content-private/content/artifacts/packs'
+        packs_dir = '/home/runner/work/content-private/content-private/content/temp_artifacts/packs'
         zip_path = '/home/runner/work/content-private/content-private/content/temp-dir'
         if not os.path.exists(packs_dir):
             logging.debug("Packs dir not found. Creating.")
@@ -226,7 +226,7 @@ def main():
         if not os.path.exists(zip_path):
             logging.debug("Temp dir not found. Creating.")
             os.mkdir(zip_path)
-        artifacts_path = '/home/runner/work/content-private/content-private/content/artifacts'
+        artifacts_path = '/home/runner/work/content-private/content-private/content/temp_artifacts'
 
     # google cloud storage client initialized
     storage_client = init_storage_client(service_account)
