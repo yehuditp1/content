@@ -222,10 +222,10 @@ def main():
         zip_path = '/home/runner/work/content-private/content-private/content/temp-dir'
         if not os.path.exists(packs_dir):
             logging.debug("Packs dir not found. Creating.")
-            os.mkdir(packs_dir)
+            os.makedirs(packs_dir)
         if not os.path.exists(zip_path):
             logging.debug("Temp dir not found. Creating.")
-            os.mkdir(zip_path)
+            os.makedirs(zip_path)
         artifacts_path = '/home/runner/work/content-private/content-private/content/temp_artifacts'
 
     # google cloud storage client initialized
