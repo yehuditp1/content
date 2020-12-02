@@ -57,12 +57,12 @@ def upload_premium_pack_to_private_testing_bucket(premium_pack, private_testing_
 
 def main():
     install_logging('Prepare_Content_Packs_For_Testing.log')
-    packs_dir = '/home/runner/work/content-private/content-private/content/artifacts/packs'
+    packs_dir = '/home/runner/work/content-private/content-private/content/temp_artifacts/packs'
     temp_dir = '/home/runner/work/content-private/content-private/content/temp-dir'
     if not os.path.exists(packs_dir):
-        os.mkdir(packs_dir)
+        os.makedirs(packs_dir)
     if not os.path.exists(temp_dir):
-        os.mkdir(temp_dir)
+        os.makedirs(temp_dir)
     upload_config = option_handler()
     path_to_artifacts = upload_config.artifacts_path
     extract_destination_path = upload_config.extract_path
