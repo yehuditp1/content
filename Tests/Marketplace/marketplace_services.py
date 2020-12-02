@@ -854,7 +854,7 @@ class Pack(object):
                 else:
                     _pack_artifacts_path = pack_artifacts_path.replace('/artifacts',
                                                                        '/temp_artifacts')
-                print(f"Files found in the zip_pack_path are:{os.listdir(zip_pack_path)}")
+                # print(f"Files found in the zip_pack_path are:{os.listdir(zip_pack_path)}")
                 print(f"Artifacts path even exists? - {os.path.exists(_pack_artifacts_path)}")
                 print(f"Copying {zip_pack_path} to {_pack_artifacts_path}/packs/{self._pack_name}.zip")
                 try:
