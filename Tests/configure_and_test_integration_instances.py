@@ -16,6 +16,7 @@ from threading import Thread
 from distutils.version import LooseVersion
 import logging
 from typing import List
+from memory_profiler import profile
 
 from Tests.scripts.utils.log_util import install_logging
 
@@ -1326,7 +1327,7 @@ def install_packs_pre_update(build: Build) -> bool:
         installed_content_packs_successfully = True
     return installed_content_packs_successfully
 
-
+@profile(stream=open('/home/circleci/project/artifacts/profiling/installation_main.txt', 'w+'))
 def main():
     install_logging('Install Content And Configure Integrations On Server.log')
     build = Build(options_handler())
