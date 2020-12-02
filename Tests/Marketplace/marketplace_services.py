@@ -852,7 +852,8 @@ class Pack(object):
                     _pack_artifacts_path = pack_artifacts_path.replace('artifacts/content_packs.zip',
                                                                        'temp_artifacts')
                 else:
-                    _pack_artifacts_path = pack_artifacts_path
+                    _pack_artifacts_path = pack_artifacts_path.replace('/artifacts',
+                                                                       '/temp_artifacts')
                 print(f"Copying {zip_pack_path} to {_pack_artifacts_path}/packs/{self._pack_name}.zip")
                 shutil.copy(zip_pack_path, f'{_pack_artifacts_path}/packs/{self._pack_name}.zip')
 
