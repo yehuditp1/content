@@ -373,14 +373,13 @@ def option_handler():
     return parser.parse_args()
 
 
-def prepare_test_directories(pack_artifacts_path):
+def prepare_test_directories():
     """
-    :param pack_artifacts_path: Path the the artifacts packs directory.
     Ensures the artifacts directory is present for the private build
     :return: None
     """
 
-    packs_dir = '/home/runner/work/content-private/content-private/content/artifacts/packs'
+    packs_dir = '/home/runner/work/content-private/content-private/content/temp-artifacts/packs'
     zip_path = '/home/runner/work/content-private/content-private/content/temp-dir'
     if not os.path.exists(packs_dir):
         logging.info("Packs dir not found. Creating.")
@@ -407,7 +406,7 @@ def main():
 
     print(f"Packs artifact path is: {packs_artifacts_path}")
 
-    prepare_test_directories(packs_artifacts_path)
+    prepare_test_directories()
 
     # google cloud storage client initialized
     storage_client = init_storage_client(service_account)
