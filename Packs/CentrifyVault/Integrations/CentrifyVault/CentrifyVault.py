@@ -1,16 +1,12 @@
-import json
-import time
-
-import demistomock as demisto  # noqa: F401
 # IMPORTS
 import requests
-from CommonServerPython import *  # noqa: F401
-
+import json
+import time
+import re
 # Disable insecure warnings
 requests.packages.urllib3.disable_warnings()
 
 """PARAMETERS"""
-
 
 class Client(BaseClient):
     """
@@ -19,9 +15,7 @@ class Client(BaseClient):
     """
 
     def __init__(self, token_retrieval_url, data, app_id, use_ssl, proxy):
-        headers = {
-            'X-CENTRIFY-NATIVE-CLIENT': 'true'
-        }
+        headers = {'X-CENTRIFY-NATIVE-CLIENT': 'true'}
         super().__init__(base_url=token_retrieval_url, headers=headers, verify=use_ssl, proxy=proxy)
         self.payload = data
         self.app_id = app_id
@@ -29,9 +23,10 @@ class Client(BaseClient):
         # Trust environment settings for proxy configuration
         self.trust_env = proxy
         self.session = requests.Session()
-        self.session.headers = headers
+        self.session.headers = str(headers)
         if not proxy:
             self.session.trust_env = False
+
 
     def authenticate_oauth(self):
         """
@@ -44,7 +39,6 @@ class Client(BaseClient):
         if bearer_token and valid_until:
             if time_now < valid_until:
                 # Bearer Token is still valid - did not expire yet
-                # print("Bearer Token is still valid - did not expire yet")
                 return 200, bearer_token
         urlSuffix = '/oauth2/token/' + self.app_id
         response = self.http_request('POST', url_suffix=urlSuffix, full_url=self._base_url, data=self.payload)
@@ -57,9 +51,9 @@ class Client(BaseClient):
             'bearer_token': bearer_token,
             'valid_until': expiration_time  # Assuming the expiration time is 30 minutes
         }
-        #print("Setting new token")
         demisto.setIntegrationContext(integration_context)
         return response_code, bearer_token
+
 
     def http_request(self, method: str, url_suffix: str = None, full_url: str = None, params: dict = None,
                      data: str = None, headers: dict = None):
@@ -108,20 +102,9 @@ class Client(BaseClient):
             raise Exception(str(exception))
 
 
-def raise_error(error):
-    return {
-        'Type': entryTypes['error'],
-        'ContentsFormat': formats['text'],
-        'Contents': str(error)
-    }
-
-
 """Demisto Output Entry"""
-
-
 def create_entry(title, data):
-    md = tableToMarkdown(title, data, ['FolderName', 'SecretName', 'SecretText', 'SecretType',
-                                       'SecretDescription']) if data else 'No result were found'
+    md = tableToMarkdown(title, data, ['FolderName', 'SecretName', 'SecretText', 'SecretType', 'SecretDescription']) if data else 'No result were found'
     if data:
         ec = {'Centrify.Secrets(val.SecretName===obj.SecretName and val.FolderName===obj.FolderName)': data}
         return {
@@ -146,12 +129,11 @@ def test_module(client: Client):
     try:
         response_code, bearer_token = client.authenticate_oauth()
         if response_code == 200:
-            # demisto.results('ok')
             return 'ok'
         else:
             return "Invalid client creds or client not allowed"
-    except:
-        return "Invalid client creds or client not allowed"
+    except Exception as e:
+        return "Invalid client creds or client not allowed ", e
 
 
 def headers(bearer_token):
@@ -164,15 +146,12 @@ def headers(bearer_token):
 
 
 """Fetches the Centrify set id for the setname provided"""
-
-
 def fetch_secret_set_id(client: Client, setName, bearer_token):
     urlSuffix = '/Collection/GetObjectCollectionsAndFilters'
     # retrieve_set_id_url = TENANT_URL + '/Collection/GetObjectCollectionsAndFilters'
     payload = str({"ObjectType": "DataVault", "CollectionType": "ManualBucket"})
     client.session.headers = headers(bearer_token)
-    centrify_setid_response = client.http_request(
-        method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    centrify_setid_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     centrify_setid_response_json = json.loads(centrify_setid_response.text)
     for set_item in centrify_setid_response_json['Result']['Results']:
         if set_item['Row']['Name'] == setName:
@@ -181,15 +160,12 @@ def fetch_secret_set_id(client: Client, setName, bearer_token):
 
 
 """Fetches the secret id's list for the setid provided"""
-
-
 def fetch_secretids_set(client: Client, set_id, bearer_token, secret_ids_list):
     urlSuffix = '/Collection/GetMembers'
     # retrieve_secretids_url = TENANT_URL + '/Collection/GetMembers'
     payload = str({"ID": set_id})
     client.session.headers = headers(bearer_token)
-    centrify_secretids_response = client.http_request(
-        method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    centrify_secretids_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     centrify_secretids_response_json = json.loads(centrify_secretids_response.text)
     for secret_id_item in centrify_secretids_response_json["Result"]:
         secret_ids_list.append(secret_id_item['Key'])
@@ -197,29 +173,23 @@ def fetch_secretids_set(client: Client, set_id, bearer_token, secret_ids_list):
 
 
 """Fetches the Centrify folder id for the foldername provided"""
-
-
 def fetch_secret_folder_id(client: Client, folderName, bearer_token):
     urlSuffix = '/ServerManage/GetSecretFolder'
     # retrieve_folder_id_url = TENANT_URL + '/ServerManage/GetSecretFolder'
     payload = str({"Name": folderName})
     client.session.headers = headers(bearer_token)
-    centrify_folderid_response = client.http_request(
-        method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    centrify_folderid_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     centrify_folderid_response_json = json.loads(centrify_folderid_response.text)
     return centrify_folderid_response_json['Result']['Results'][0]['Row']['ID']
 
 
 """Fetches the secret id's list recurrsively for the folderid provided"""
-
-
 def fetch_secretids_folder(client: Client, folder_id, bearer_token, secret_ids_list, recursive):
     urlSuffix = '/ServerManage/GetSecretsAndFolders'
     # retrieve_secretids_url = TENANT_URL + '/ServerManage/GetSecretsAndFolders'
     payload = str({"Parent": folder_id})
     client.session.headers = headers(bearer_token)
-    centrify_secretids_response = client.http_request(
-        method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    centrify_secretids_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     centrify_secretids_response_json = json.loads(centrify_secretids_response.text)
     secret_ids_count = centrify_secretids_response_json['Result']['FullCount']
     for secret_id_item in range(secret_ids_count):
@@ -235,28 +205,22 @@ def fetch_secretids_folder(client: Client, folder_id, bearer_token, secret_ids_l
 
 
 """Fetches details of all the sets in Centrify Vault"""
-
-
 def fetch_set_details(client: Client, bearer_token, set_details_list):
     urlSuffix = '/Collection/GetObjectCollectionsAndFilters'
     payload = str({"ObjectType": "DataVault", "CollectionType": "ManualBucket"})
     client.session.headers = headers(bearer_token)
-    centrify_setdetails_response = client.http_request(
-        method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    centrify_setdetails_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     centrify_setdetails_response_json = json.loads(centrify_setdetails_response.text)
     for set_item in centrify_setdetails_response_json['Result']['Results']:
         if 'Description' not in set_item['Row']:
             set_description = ""
         else:
             set_description = set_item['Row']['Description']
-        set_details_list.append({'SetName': set_item['Row']['Name'],
-                                 'SetID': set_item['Row']['ID'], 'SetDescription': set_description})
+        set_details_list.append({'SetName':  set_item['Row']['Name'], 'SetID': set_item['Row']['ID'], 'SetDescription': set_description})
     return set_details_list
 
 
 """Fetches the centrify secret details for the secret response received through the fetch_secret() method"""
-
-
 def centrify_secret_details(centrify_secret):
     CENTRIFY_VAULT = {}
     CENTRIFY_VAULT['FolderName'] = centrify_secret['Result']['ParentPath']
@@ -272,15 +236,12 @@ def centrify_secret_details(centrify_secret):
 
 
 """Fetches the centrify secret details for the secret id and name(optional) provided"""
-
-
 def fetch_secret(client: Client, secret_id, bearer_token, secret_name, regex_match):
     urlSuffix = '/ServerManage/RetrieveDataVaultItemContents'
     # retrieve_secret_url = TENANT_URL + '/ServerManage/RetrieveDataVaultItemContents'
     payload = str({"ID": secret_id})
     client.session.headers = headers(bearer_token)
-    centrify_secret_response = client.http_request(
-        method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    centrify_secret_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     centrify_secret_response_json = json.loads(centrify_secret_response.text)
     if secret_name:
         if regex_match:
@@ -299,15 +260,12 @@ def fetch_secret(client: Client, secret_id, bearer_token, secret_name, regex_mat
 
 
 """Fetches details of all folders in list recurrsively"""
-
-
 def fetch_folderids(client: Client, folder_id, bearer_token, folders_list):
     urlSuffix = '/ServerManage/GetSecretsAndFolders'
     # retrieve_folderids_url = TENANT_URL + '/ServerManage/GetSecretsAndFolders'
     payload = str({"Parent": folder_id})
     client.session.headers = headers(bearer_token)
-    centrify_folderids_response = client.http_request(
-        method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    centrify_folderids_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     centrify_folderids_response_json = json.loads(centrify_folderids_response.text)
     folder_ids_count = centrify_folderids_response_json['Result']['FullCount']
     for folder_id_item in range(folder_ids_count):
@@ -317,7 +275,8 @@ def fetch_folderids(client: Client, folder_id, bearer_token, folders_list):
                 folder_directory = folder_res['ParentPath'] + "\\" + folder_res['Name']
             else:
                 folder_directory = folder_res['Name']
-            folders_list.append({"FolderName": folder_res['Name'], "FolderID": folder_res['ID'], "ParentFolder": folder_res['ParentPath'],
+            folders_list.append({"FolderName": folder_res['Name'], "FolderID": folder_res['ID'],
+                                 "ParentFolder": folder_res['ParentPath'],
                                  "FolderDescription": folder_res['Description'], "FolderDirectory": folder_directory})
             sub_folder_id = folder_res['ID']
             fetch_folderids(client, sub_folder_id, bearer_token, folders_list)
@@ -327,15 +286,12 @@ def fetch_folderids(client: Client, folder_id, bearer_token, folders_list):
 
 
 """Creates a centrify folder for the foldername, description and parent foldername(optional) provided"""
-
-
 def create_folder(client: Client, folderName, description, parent_id, bearer_token):
     urlSuffix = '/ServerManage/AddSecretsFolder'
     # create_folder_url = TENANT_URL + '/ServerManage/AddSecretsFolder'
     payload = str({"Name": folderName, "Description": description, "Parent": parent_id})
     client.session.headers = headers(bearer_token)
-    centrify_folder_response = client.http_request(
-        method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    centrify_folder_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     centrify_folder_response_json = json.loads(centrify_folder_response.text)
     if centrify_folder_response.status_code == 200 and centrify_folder_response_json['success'] is True:
         return "Folder Created", centrify_folder_response_json['Result']
@@ -344,15 +300,12 @@ def create_folder(client: Client, folderName, description, parent_id, bearer_tok
 
 
 """Creates a centrify set for the setname provided"""
-
-
 def create_set(client: Client, setName, description, bearer_token):
     urlSuffix = '/Collection/CreateManualCollection'
     # create_set_url = TENANT_URL + '/Collection/CreateManualCollection'
     payload = str({"ObjectType": "DataVault", "Name": setName, "Description": description})
     client.session.headers = headers(bearer_token)
-    centrify_set_response = client.http_request(method="POST", full_url=client._base_url,
-                                                url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    centrify_set_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     centrify_set_response_json = json.loads(centrify_set_response.text)
     if centrify_set_response.status_code == 200 and centrify_set_response_json['success'] is True:
         return "Set Created", centrify_set_response_json['Result']
@@ -361,16 +314,12 @@ def create_set(client: Client, setName, description, bearer_token):
 
 
 """Creates a centrify secret in the folder for the provided foldername, secrettext, secrettype"""
-
-
 def create_secret(client: Client, folderId, secret_name, secret_text, secret_type, secret_description, bearer_token):
     urlSuffix = '/ServerManage/AddSecret'
     # create_secret_url = TENANT_URL + '/ServerManage/AddSecret'
-    payload = str({"SecretName": secret_name, "SecretText": secret_text, "Type": secret_type,
-                   "FolderId": folderId, "Description": secret_description})
+    payload = str({"SecretName": secret_name, "SecretText": secret_text, "Type": secret_type, "FolderId": folderId, "Description": secret_description})
     client.session.headers = headers(bearer_token)
-    centrify_secret_response = client.http_request(
-        method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    centrify_secret_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     centrify_secret_response_json = json.loads(centrify_secret_response.text)
     if centrify_secret_response.status_code == 200 and centrify_secret_response_json['success'] is True:
         return "Secret Created", centrify_secret_response_json['Result']
@@ -379,15 +328,12 @@ def create_secret(client: Client, folderId, secret_name, secret_text, secret_typ
 
 
 """Adds a secret to the set for the provided setid, secretid"""
-
-
 def add_secret_set(client: Client, setId, secretId, bearer_token):
     urlSuffix = '/Collection/UpdateMembersCollection'
     # add_secretset_url = TENANT_URL + '/Collection/UpdateMembersCollection'
     payload = str({"id": setId, "add": [{"MemberType": "Row", "Table": "DataVault", "Key": secretId}]})
     client.session.headers = headers(bearer_token)
-    add_secretset_response = client.http_request(method="POST", full_url=client._base_url,
-                                                 url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    add_secretset_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     add_secretset_response_json = json.loads(add_secretset_response.text)
     if add_secretset_response.status_code == 200 and add_secretset_response_json['success'] is True:
         return "Secret added to the set"
@@ -396,15 +342,12 @@ def add_secret_set(client: Client, setId, secretId, bearer_token):
 
 
 """deletes a folder from the vault for the provided folderid"""
-
-
 def delete_folder(client: Client, folderId, bearer_token):
     urlSuffix = '/ServerManage/DeleteSecretsFolder'
     # delete_folder_url = TENANT_URL + '/ServerManage/DeleteSecretsFolder'
     payload = str({"ID": folderId})
     client.session.headers = headers(bearer_token)
-    delete_folder_response = client.http_request(method="POST", full_url=client._base_url,
-                                                 url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    delete_folder_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     delete_folder_response_json = json.loads(delete_folder_response.text)
     if delete_folder_response.status_code == 200 and delete_folder_response_json['success'] is True:
         return "Folder Deleted"
@@ -413,15 +356,12 @@ def delete_folder(client: Client, folderId, bearer_token):
 
 
 """deletes a set from the vault for the provided setid"""
-
-
 def delete_set(client: Client, setId, bearer_token):
     urlSuffix = '/Collection/DeleteCollection'
     # delete_set_url = TENANT_URL + '/Collection/DeleteCollection'
     payload = str({"ID": setId})
     client.session.headers = headers(bearer_token)
-    delete_set_response = client.http_request(method="POST", full_url=client._base_url,
-                                              url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    delete_set_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     delete_set_response_json = json.loads(delete_set_response.text)
     if delete_set_response.status_code == 200 and delete_set_response_json['success'] is True:
         return "Set Deleted"
@@ -430,15 +370,12 @@ def delete_set(client: Client, setId, bearer_token):
 
 
 """deletes a secret the vault for the provided secretid"""
-
-
 def delete_secret(client: Client, secretId, bearer_token):
     urlSuffix = '/ServerManage/DeleteSecret'
     # delete_secret_url = TENANT_URL + '/ServerManage/DeleteSecret'
     payload = str({"ID": secretId})
     client.session.headers = headers(bearer_token)
-    delete_secret_response = client.http_request(method="POST", full_url=client._base_url,
-                                                 url_suffix=urlSuffix, headers=client.session.headers, data=payload)
+    delete_secret_response = client.http_request(method="POST", full_url=client._base_url, url_suffix=urlSuffix, headers=client.session.headers, data=payload)
     delete_secret_response_json = json.loads(delete_secret_response.text)
     if delete_secret_response.status_code == 200 and delete_secret_response_json['success'] is True:
         return "Secret Deleted"
@@ -477,9 +414,8 @@ def fetch_secrets(args: dict, client: Client):
             secret_list.append(fetch_secret(client, secret_id, bearer_token, secret_name, True))
         secret_list = list(filter(None, secret_list))
         return create_entry('Secrets in the Folder/Set', secret_list)
-    except:
-        return_error("Wrong inputs: Please enter valid foldername/secretname/setname")
-
+    except Exception as e:
+        return_error("Wrong inputs: Please enter valid foldername/secretname/setname: ", e)
 
 def fetch_secret_by_id(args: dict, client: Client):
     try:
@@ -489,8 +425,8 @@ def fetch_secret_by_id(args: dict, client: Client):
         secret_list: list = []
         secret_list.append(fetch_secret(client, secret_id, bearer_token, None, None))
         return create_entry('Secrets through the Secret ID', secret_list)
-    except:
-        return_error("Wrong inputs")
+    except Exception as e:
+        return_error("Wrong inputs: ", e)
 
 
 def create_secret_folder(args: dict, client: Client):
@@ -518,8 +454,7 @@ def create_secret_folder(args: dict, client: Client):
             else:
                 CENTRIFY_VAULT['FolderDescription'] = ''
             fcreate = [CENTRIFY_VAULT]
-            md = tableToMarkdown(status, fcreate, ['FolderName', 'FolderID', 'ParentFolderName',
-                                                   'FolderDescription']) if fcreate else 'No result were found'
+            md = tableToMarkdown(status, fcreate, ['FolderName', 'FolderID', 'ParentFolderName', 'FolderDescription']) if fcreate else 'No result were found'
             ec = {'Centrify.Folder(val.FolderName===obj.FolderName and val.ParentFolderName===obj.ParentFolderName)': fcreate}
             return {
                 'ContentsFormat': formats['json'],
@@ -531,8 +466,8 @@ def create_secret_folder(args: dict, client: Client):
             }
         else:
             return 'No result were found: ' + status
-    except:
-        return_error("Wrong inputs")
+    except Exception as e:
+        return_error("Wrong inputs: ", e)
 
 
 def create_vault_secret(args: dict, client: Client):
@@ -555,7 +490,7 @@ def create_vault_secret(args: dict, client: Client):
             set_name_list = list()
             if ';' in str(args.get('holderName')):
                 set_name_list = str(args.get('holderName')).split(';')
-                for set_item in set_name_list:
+                for  set_item in set_name_list:
                     set_name = set_item
                     set_id = fetch_secret_set_id(client, set_name, bearer_token)
                     setId_list.append(set_id)
@@ -565,8 +500,7 @@ def create_vault_secret(args: dict, client: Client):
                 setId_list.append(fetch_secret_set_id(client, set_name, bearer_token))
             if 'set name not found' in setId_list:
                 return_error("Set name not found. Please provide a valid set name")
-        status, secret_id = create_secret(client, folder_id, secret_name, secret_text,
-                                          secret_type, secret_description, bearer_token)
+        status, secret_id = create_secret(client, folder_id, secret_name, secret_text, secret_type, secret_description, bearer_token)
         screate: list = []
         if status == "Secret Created":
             CENTRIFY_VAULT = {}
@@ -584,8 +518,7 @@ def create_vault_secret(args: dict, client: Client):
             CENTRIFY_VAULT['SecretType'] = secret_type
             CENTRIFY_VAULT['SecretDescription'] = secret_description
             screate = [CENTRIFY_VAULT]
-            md = tableToMarkdown(status, screate, ['SecretName', 'FolderName', 'SetName', 'SecretType',
-                                                   'SecretID', 'SecretDescription']) if screate else 'No result were found'
+            md = tableToMarkdown(status, screate, ['SecretName', 'FolderName', 'SetName', 'SecretType', 'SecretID', 'SecretDescription']) if screate else 'No result were found'
             ec = {'Centrify.Secrets(val.SecretID===obj.SecretID)': screate}
             return {
                 'ContentsFormat': formats['json'],
@@ -597,8 +530,8 @@ def create_vault_secret(args: dict, client: Client):
             }
         else:
             return 'No result were found: ' + status
-    except:
-        return_error("Wrong inputs. Please provide valid foldername/setname")
+    except Exception as e:
+        return_error("Wrong inputs. Please provide valid foldername/setname ", e)
 
 
 def create_vault_set(args: dict, client: Client):
@@ -621,8 +554,7 @@ def create_vault_set(args: dict, client: Client):
             else:
                 CENTRIFY_VAULT['SetDescription'] = ''
             set_create = [CENTRIFY_VAULT]
-            md = tableToMarkdown(status, set_create, ['SetName', 'SetID', 'SetDescription']
-                                 ) if set_create else 'No result were found'
+            md = tableToMarkdown(status, set_create, ['SetName', 'SetID', 'SetDescription']) if set_create else 'No result were found'
             ec = {'Centrify.Set(val.SetID===obj.SetID)': set_create}
             return {
                 'ContentsFormat': formats['json'],
@@ -645,8 +577,9 @@ def fetch_vault_folders(args: dict, client: Client):
         folders_list: list = []
         folders_list = fetch_folderids(client, "", bearer_token, folders_list)
         if folders_list:
-            md = tableToMarkdown("List of all folders", folders_list, ['FolderName', 'FolderID', 'ParentFolder', 'FolderDescription', 'FolderDirectory']) \
-                if folders_list else 'No result were found'
+            md = tableToMarkdown("List of all folders", folders_list,
+                                 ['FolderName', 'FolderID', 'ParentFolder', 'FolderDescription',
+                                  'FolderDirectory']) if folders_list else 'No result were found'
             ec = {'Centrify.Folder(val.FolderID===obj.FolderID)': folders_list}
             return {
                 'ContentsFormat': formats['json'],
@@ -669,8 +602,7 @@ def fetch_vault_set(args: dict, client: Client):
         set_details_list: list = []
         set_details_list = fetch_set_details(client, bearer_token, set_details_list)
         if set_details_list:
-            md = tableToMarkdown("List of all sets", set_details_list, [
-                                 'SetName', 'SetID', 'SetDescription']) if set_details_list else 'No result were found'
+            md = tableToMarkdown("List of all sets", set_details_list, ['SetName', 'SetID', 'SetDescription']) if set_details_list else 'No result were found'
             ec = {'Centrify.Set(val.SetID===obj.SetID)': set_details_list}
             return {
                 'ContentsFormat': formats['json'],
@@ -732,8 +664,7 @@ def delete_vault_secret(args: dict, client: Client):
                 delete_secret(client, secret_item['SecretID'], bearer_token)
                 delete_secret_id_list.append(secret_item)
         if delete_secret_id_list:
-            md = tableToMarkdown("List of Secrets deleted", delete_secret_id_list, [
-                                 'SecretName', 'SecretID', 'FolderName']) if delete_secret_id_list else 'No secrets were deleted'
+            md = tableToMarkdown("List of Secrets deleted", delete_secret_id_list, ['SecretName', 'SecretID', 'FolderName']) if delete_secret_id_list else 'No secrets were deleted'
             return {
                 'ContentsFormat': formats['json'],
                 'Type': entryTypes['note'],
@@ -743,8 +674,8 @@ def delete_vault_secret(args: dict, client: Client):
             }
         else:
             return 'No result were found: No secrets were deleted'
-    except:
-        return_error("Please enter a valid secretname/foldername")
+    except Exception as e:
+        return_error("Please enter a valid secretname/foldername: ", e)
 
 
 def delete_vault_secretid(args: dict, client: Client):
@@ -756,8 +687,7 @@ def delete_vault_secretid(args: dict, client: Client):
         delete_secret_id_list.append(fetch_secret(client, secret_id, bearer_token, None, None))
         delete_secret(client, secret_id, bearer_token)
         if delete_secret_id_list:
-            md = tableToMarkdown("Secrets deleted", delete_secret_id_list, [
-                                 'SecretName', 'SecretID', 'FolderName']) if delete_secret_id_list else 'No secrets were deleted'
+            md = tableToMarkdown("Secrets deleted", delete_secret_id_list, ['SecretName', 'SecretID', 'FolderName']) if delete_secret_id_list else 'No secrets were deleted'
             return {
                 'ContentsFormat': formats['json'],
                 'Type': entryTypes['note'],
@@ -767,8 +697,8 @@ def delete_vault_secretid(args: dict, client: Client):
             }
         else:
             return 'No result were found: No secrets were deleted'
-    except:
-        return_error("Please enter a valid secretname/foldername")
+    except Exception as e:
+        return_error("Please enter a valid secretname/foldername: ", e)
 
 
 def delete_vault_folder(args: dict, client: Client):
@@ -785,8 +715,8 @@ def delete_vault_folder(args: dict, client: Client):
             return str(folder_name) + " : " + str(delete_status)
         else:
             return 'No result were found: No folders found to be deleted'
-    except:
-        return_error("Please enter a valid foldername")
+    except Exception as e:
+        return_error("Please enter a valid foldername: ", e)
 
 
 def delete_vault_set(args: dict, client: Client):
@@ -803,8 +733,8 @@ def delete_vault_set(args: dict, client: Client):
                 return str(set_name) + " : " + str(delete_status)
             else:
                 return 'No result were found: No sets found to be deleted'
-    except:
-        return_error("Please enter a valid setname")
+    except Exception as e:
+        return_error("Please enter a valid setname: ", e)
 
 
 def main():
