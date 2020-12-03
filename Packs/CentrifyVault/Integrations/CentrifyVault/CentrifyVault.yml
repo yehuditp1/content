@@ -41,7 +41,6 @@ script:
     - auto: PREDEFINED
       description: Type of holder where the secret is located. Values can be Folder
         or Set. Please make sure to provide value in the "holderName" argument.
-      isArray: true
       name: holderType
       predefined:
       - Folder
