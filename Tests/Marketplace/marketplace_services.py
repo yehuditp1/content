@@ -736,12 +736,14 @@ class Pack(object):
             return task_status
 
     def encrypt_pack(self, zip_pack_path, pack_name, encryption_key, extract_destination_path):
+        print('\n\n encrypting pack \n\n')
         try:
             shutil.copy('./encryptor', os.path.join(extract_destination_path, 'encryptor'))
             os.chmod(os.path.join(extract_destination_path, 'encryptor'), stat.S_IXOTH)
             current_working_dir = os.getcwd()
             os.chdir(extract_destination_path)
             output_file = zip_pack_path.replace("_not_encrypted.zip", ".zip")
+            print('\n\n output_file after first replace is: {} \n\n'.format(output_file))
             subprocess.call('chmod +x ./encryptor', shell=True)
             full_command = f'./encryptor ./{pack_name}_not_encrypted.zip {output_file} "' \
                            f'{encryption_key}"'
@@ -862,7 +864,7 @@ class Pack(object):
             pack_full_path = os.path.join(version_pack_path, f"{self._pack_name}.zip")
             blob = storage_bucket.blob(pack_full_path)
             blob.cache_control = "no-cache,max-age=0"  # disabling caching for pack blob
-
+            print('\n\n just before upload uploaded zip_pack_path is: {}, blob is: {} \n\n'.format(zip_pack_path, blob))
             with open(zip_pack_path, "rb") as pack_zip:
                 blob.upload_from_file(pack_zip)
             if private_content:

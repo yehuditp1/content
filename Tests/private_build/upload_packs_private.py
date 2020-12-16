@@ -259,7 +259,10 @@ def create_and_upload_marketplace_pack(upload_config: Any, pack: Any, storage_bu
         pack.status = PackStatus.FAILED_SIGNING_PACKS.name
         pack.cleanup()
         return
-
+    if enc_key:
+        print('\n\n\n enc_key before zipping pack is not None \n\n\n')
+    else:
+        print('\n\n\n enc_key before zipping pack is NONE!! \n\n\n')
     task_status, zip_pack_path = pack.zip_pack(extract_destination_path, pack._pack_name, enc_key)
 
     if not task_status:
@@ -278,6 +281,7 @@ def create_and_upload_marketplace_pack(upload_config: Any, pack: Any, storage_bu
         pack_was_modified = False
 
     bucket_for_uploading = private_storage_bucket if private_storage_bucket else storage_bucket
+    print('\n\n zip_pack_path is: {}, bucket_for_uploading is: {} \n\n'.format(zip_pack_path, bucket_for_uploading))
     (task_status, skipped_pack_uploading, full_pack_path) = \
         pack.upload_to_storage(zip_pack_path, pack.latest_version,
                                bucket_for_uploading, override_all_packs
@@ -405,6 +409,10 @@ def main():
     is_private_build = upload_config.is_private
 
     print(f"Packs artifact path is: {packs_artifacts_path}")
+    if upload_config.encryption_key:
+        print('\n\n\n enc_key in main is not None \n\n\n')
+    else:
+        print('\n\n\n enc_key in main is NONE!! \n\n\n')
 
     prepare_test_directories(packs_artifacts_path)
 
