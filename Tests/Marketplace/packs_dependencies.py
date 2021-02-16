@@ -90,11 +90,14 @@ def calculate_single_pack_dependencies(pack: str, dependency_graph: object) -> T
     try:
         logging.info(f"Calculating {pack} pack dependencies.")
         subgraph = PackDependencies.get_dependencies_subgraph_by_dfs(dependency_graph, pack)
+        print(f'\n\n subgraph is: {subgraph}\n\n')
         for dependency_pack, additional_data in subgraph.nodes(data=True):
             logging.debug(f'Iterating dependency {dependency_pack} for pack {pack}')
             additional_data['mandatory'] = pack in additional_data['mandatory_for_packs']
             del additional_data['mandatory_for_packs']
             first_level_dependencies, all_level_dependencies = parse_for_pack_metadata(subgraph, pack)
+            print(f'\n\n first_level_dependencies is: {first_level_dependencies}\n\n')
+            print(f'\n\n all_level_dependencies is: {all_level_dependencies}\n\n')
     except Exception:
         logging.exception(f"Failed calculating {pack} pack dependencies")
         raise
@@ -185,6 +188,7 @@ def calculate_all_packs_dependencies(pack_dependencies_result: dict, id_set: dic
 
     # Generating one graph with dependencies for all packs
     dependency_graph = get_all_packs_dependency_graph(id_set, packs)
+    print(f'\n\n Dependency graph is: {dependency_graph}\n\n')
 
     with ProcessPoolHandler() as pool:
         futures = []
