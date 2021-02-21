@@ -7,6 +7,7 @@ The CrowdStrike intelligence team tracks the activities of threat actor groups a
 
 | **Parameter** | **Description** | **Required** |
 | --- | --- | --- |
+| Cloud Base URL (e.g., https://api.crowdstrike.com) |  | False |
 | feed | Fetch indicators | False |
 | client_id | The Crowdstrike API client ID | True |
 | feedReputation | Indicator reputation | False |
