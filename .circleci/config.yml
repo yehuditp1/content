@@ -1117,9 +1117,9 @@ jobs:
                   echo $GCS_MARKET_KEY > $GCS_PATH
 
                   GCS_BUILD_BUCKET="marketplace-ci-build"
-                  if [[ $GCS_MARKET_BUCKET != "marketplace-dist" ]]; then
-                    STORAGE_BASE_PATH="upload-flow/builds/$CIRCLE_BRANCH/$CREATE_INSTANCES_JOB_NUMBER/content/packs"
-                  fi
+#                  if [[ $GCS_MARKET_BUCKET != "marketplace-dist" ]]; then
+#                    STORAGE_BASE_PATH="upload-flow/builds/$CIRCLE_BRANCH/$CREATE_INSTANCES_JOB_NUMBER/content/packs"
+#                  fi
 
                   python3 ./Tests/Marketplace/copy_and_upload_packs.py -a $PACK_ARTIFACTS -e $EXTRACT_FOLDER -pb "$GCS_MARKET_BUCKET" -bb "$GCS_BUILD_BUCKET" -s $GCS_PATH -n $CREATE_INSTANCES_JOB_NUMBER -c $CIRCLE_BRANCH -pbp "$STORAGE_BASE_PATH"
                   rm $GCS_PATH
