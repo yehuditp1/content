@@ -137,17 +137,16 @@ def fetch_notables(service, cache_object=None, enrich_notables=False):
         demisto.incidents(incidents)
     else:
         cache_object.not_yet_submitted_notables += notables
+        if DUMMY not in last_run_object:
+            # we add dummy data to the last run to differentiate between the fetch-incidents triggered to the
+            # fetch-incidents running as part of "Pull from instance" in Classification & Mapping, as we don't
+            # want to add data to the integration context (which will ruin the logic of the cache object)
+            last_run_object.update({DUMMY: DUMMY})
 
     if len(notables) < FETCH_LIMIT:
         updated_last_run_object = {'time': now, 'offset': 0}
     else:
         updated_last_run_object = {'time': last_run, 'offset': search_offset + FETCH_LIMIT}
-
-    if enrich_notables and DUMMY not in last_run_object:
-        # we add dummy data to the last run to differentiate between the fetch-incidents triggered to the
-        # fetch-incidents running as part of "Pull from instance" in Classification & Mapping, as we don't
-        # want to add data to the integration context (which will ruin the logic of the cache object)
-        last_run_object.update({DUMMY: DUMMY})
 
     last_run_object.update(updated_last_run_object)
     demisto.setLastRun(last_run_object)
@@ -642,18 +641,14 @@ def drilldown_enrichment(service, notable_data, num_enrichment_events):
         if searchable_query:
             status, earliest_offset, latest_offset = get_drilldown_timeframe(notable_data, raw_dict)
             if status:
-                searchable_query += " earliest={} latest={}".format(earliest_offset, latest_offset)
+                searchable_query = "earliest={} latest={} ".format(earliest_offset, latest_offset) + searchable_query
                 kwargs = {"count": num_enrichment_events, "exec_mode": "normal"}
                 query = build_search_query({"query": searchable_query})
                 demisto.debug("Drilldown query for notable {}: {}".format(notable_data[EVENT_ID], query))
                 try:
                     job = service.jobs.create(query, **kwargs)
                 except Exception as e:
-                    err = str(e)
-                    demisto.error(
-                        "Caught an exception in drilldown_enrichment function. Additional Info: {}".format(err)
-                    )
-                    raise e
+                    demisto.error("Caught an exception in drilldown_enrichment function: {}".format(str(e)))
             else:
                 demisto.info('Failed getting the drilldown timeframe for notable {}'.format(notable_data[EVENT_ID]))
         else:
@@ -689,8 +684,7 @@ def identity_enrichment(service, notable_data, num_enrichment_events):
         try:
             job = service.jobs.create(query, **kwargs)
         except Exception as e:
-            demisto.error("Caught an exception in drilldown_enrichment function. Additional Info: {}".format(str(e)))
-            raise e
+            demisto.error("Caught an exception in drilldown_enrichment function: {}".format(str(e)))
     else:
         demisto.info('No users were found in notable. {}'.format(error_msg))
 
@@ -722,8 +716,7 @@ def asset_enrichment(service, notable_data, num_enrichment_events):
         try:
             job = service.jobs.create(query, **kwargs)
         except Exception as e:
-            demisto.error("Caught an exception in asset_enrichment function. Additional Info: {}".format(str(e)))
-            raise e
+            demisto.error("Caught an exception in asset_enrichment function: {}".format(str(e)))
     else:
         demisto.info('No assets were found in notable. {}'.format(error_msg))
 
@@ -1030,13 +1023,14 @@ def get_modified_remote_data_command(service, args):
     return_results(GetModifiedRemoteDataResponse(modified_incident_ids=modified_notable_ids))
 
 
-def update_remote_system_command(args, params, proxy):
+def update_remote_system_command(args, params, service, auth_token):
     """ Pushes changes in XSOAR incident into the corresponding notable event in Splunk Server.
 
     Args:
         args (dict): Demisto args
         params (dict): Demisto params
-        proxy (bool): Use system proxy settings or not
+        service (splunklib.client.Service): Splunk service object
+        auth_token (str) - The authentication token to use
 
     Returns:
         notable_id (str): The notable id
@@ -1063,11 +1057,11 @@ def update_remote_system_command(args, params, proxy):
             demisto.info('Sending update request to Splunk for notable {}, data: {}'.format(notable_id, changed_data))
             base_url = 'https://' + params['host'] + ':' + params['port'] + '/'
             try:
-                session_key = get_session_key(proxy, params, base_url)
+                session_key = service.token if not auth_token else None
                 response_info = updateNotableEvents(
-                    sessionKey=session_key, baseurl=base_url, comment=changed_data['comment'],
-                    status=changed_data['status'], urgency=changed_data['urgency'], owner=changed_data['owner'],
-                    eventIDs=[notable_id]
+                    baseurl=base_url, comment=changed_data['comment'], status=changed_data['status'],
+                    urgency=changed_data['urgency'], owner=changed_data['owner'], eventIDs=[notable_id],
+                    auth_token=auth_token, sessionKey=session_key
                 )
                 msg = response_info.get('message')
                 if 'success' not in response_info or not response_info['success']:
@@ -1404,13 +1398,12 @@ def convert_to_str(obj):
     return str(obj)
 
 
-def updateNotableEvents(sessionKey, baseurl, comment, status=None, urgency=None, owner=None, eventIDs=None,
-                        searchID=None):
+def updateNotableEvents(baseurl, comment, status=None, urgency=None, owner=None, eventIDs=None,
+                        searchID=None, auth_token=None, sessionKey=None):
     """
     Update some notable events.
 
     Arguments:
-    sessionKey -- The session key to use
     comment -- A description of the change or some information about the notable events
     status -- A status (only required if you are changing the status of the event)
     urgency -- An urgency (only required if you are changing the urgency of the event)
@@ -1418,11 +1411,13 @@ def updateNotableEvents(sessionKey, baseurl, comment, status=None, urgency=None,
     eventIDs -- A list of notable event IDs (must be provided if a search ID is not provided)
     searchID -- An ID of a search. All of the events associated with this search will be modified
      unless a list of eventIDs are provided that limit the scope to a sub-set of the results.
+    auth_token - The authentication token to use
+    sessionKey -- The session key to use
     """
 
     # Make sure that the session ID was provided
-    if sessionKey is None:
-        raise Exception("A session key was not provided")
+    if not sessionKey and not auth_token:
+        raise Exception("A session_key/auth_token was not provided")
 
     # Make sure that rule IDs and/or a search ID is provided
     if eventIDs is None and searchID is None:
@@ -1449,7 +1444,10 @@ def updateNotableEvents(sessionKey, baseurl, comment, status=None, urgency=None,
     if searchID is not None:
         args['searchID'] = searchID
 
-    auth_header = {'Authorization': 'Splunk %s' % sessionKey}
+    if not auth_token:
+        auth_header = {'Authorization': sessionKey}
+    else:
+        auth_header = {'Authorization': 'Bearer %s' % auth_token}
 
     args['output_mode'] = 'json'
 
@@ -1838,37 +1836,10 @@ def splunk_submit_event_hec_command():
         demisto.results('The event was sent successfully to Splunk.')
 
 
-def get_session_key(proxy, params, base_url):
-    """
-
-    Args:
-        proxy (bool): Use system proxy settings or not
-        params (dict): Demisto params
-        base_url (str): The base URL for the request
-
-    Returns:
-        session_key (str): The Splunk session key
-
-    """
-    if not proxy:
-        os.environ["HTTPS_PROXY"] = ""
-        os.environ["HTTP_PROXY"] = ""
-        os.environ["https_proxy"] = ""
-        os.environ["http_proxy"] = ""
-    username = params['authentication']['identifier']
-    password = params['authentication']['password']
-    auth_req = requests.post(base_url + 'services/auth/login',
-                             data={'username': username, 'password': password, 'output_mode': 'json'},
-                             verify=VERIFY_CERTIFICATE)
-
-    session_key = auth_req.json()['sessionKey']
-    return session_key
-
-
-def splunk_edit_notable_event_command(proxy):
+def splunk_edit_notable_event_command(service, auth_token):
     params = demisto.params()
     base_url = 'https://' + params['host'] + ':' + params['port'] + '/'
-    sessionKey = get_session_key(proxy, params, base_url)
+    sessionKey = service.token if not auth_token else None
 
     eventIDs = None
     if demisto.get(demisto.args(), 'eventIDs'):
@@ -1878,16 +1849,17 @@ def splunk_edit_notable_event_command(proxy):
     if demisto.get(demisto.args(), 'status'):
         status = int(demisto.args()['status'])
 
-    response_info = updateNotableEvents(sessionKey=sessionKey, baseurl=base_url,
+    response_info = updateNotableEvents(baseurl=base_url,
                                         comment=demisto.get(demisto.args(), 'comment'), status=status,
                                         urgency=demisto.get(demisto.args(), 'urgency'),
-                                        owner=demisto.get(demisto.args(), 'owner'), eventIDs=eventIDs)
+                                        owner=demisto.get(demisto.args(), 'owner'), eventIDs=eventIDs,
+                                        auth_token=auth_token, sessionKey=sessionKey)
     if 'success' not in response_info or not response_info['success']:
         demisto.results({'ContentsFormat': formats['text'], 'Type': entryTypes['error'],
                          'Contents': "Could not update notable "
                                      "events: " + demisto.args()['eventIDs'] + ' : ' + str(response_info)})
-    else:
-        demisto.results('Splunk ES Notable events: ' + response_info.get('message'))
+
+    demisto.results('Splunk ES Notable events: ' + response_info.get('message'))
 
 
 def splunk_job_status(service):
@@ -2159,10 +2131,18 @@ def main():
         'host': demisto.params()['host'],
         'port': demisto.params()['port'],
         'app': demisto.params().get('app', '-'),
-        'username': demisto.params()['authentication']['identifier'],
-        'password': demisto.params()['authentication']['password'],
         'verify': VERIFY_CERTIFICATE
     }
+
+    auth_token = None
+    username = demisto.params()['authentication']['identifier']
+    password = demisto.params()['authentication']['password']
+    if username == '_token':
+        connection_args['splunkToken'] = password
+        auth_token = password
+    else:
+        connection_args['username'] = username
+        connection_args['password'] = password
 
     if use_requests_handler:
         handle_proxy()
@@ -2201,7 +2181,7 @@ def main():
     elif command == 'splunk-submit-event':
         splunk_submit_event_command(service)
     elif command == 'splunk-notable-event-edit':
-        splunk_edit_notable_event_command(proxy)
+        splunk_edit_notable_event_command(service, auth_token)
     elif command == 'splunk-submit-event-hec':
         splunk_submit_event_hec_command()
     elif command == 'splunk-job-status':
@@ -2239,7 +2219,7 @@ def main():
     elif command == 'get-modified-remote-data':
         get_modified_remote_data_command(service, demisto.args())
     elif command == 'update-remote-system':
-        update_remote_system_command(demisto.args(), demisto.params(), proxy)
+        update_remote_system_command(demisto.args(), demisto.params(), service, auth_token)
     else:
         raise NotImplementedError('Command not implemented: {}'.format(command))
 
