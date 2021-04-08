@@ -38,22 +38,6 @@ data_test_get_report_context = [
 ]
 
 
-@pytest.mark.parametrize('test, result', data_test_hash_type_checker)
-def test_hash_type_checker(test: str, result: str):
-    try:
-        assert hash_type_checker(test) == result, f'{INTEGRATION_NAME} Test.hash_type_checker() == {result}'
-    except DemistoException as error:
-        assert str(error) == result, f'{INTEGRATION_NAME} Test.hash_type_checker() invalid type error'
-
-
-@pytest.mark.parametrize('test, result', data_test_exception_handler)
-def test_exception_handler(test: Dict, result: str):
-    try:
-        lastline_exception_handler(test)
-    except DemistoException as error_msg:
-        assert str(error_msg) == result, f'{INTEGRATION_NAME} Test.exception_helper() failed'
-
-
 def test_file_hash():
     # ./data_test/get_report_file.json hard coded hash md5
     output = '7ec67d7adb2ecfa05f54c852b646eeac'
