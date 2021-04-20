@@ -330,7 +330,43 @@ class Pack(object):
             return pack_versions[0].vstring
 
     @staticmethod
-    def _get_all_pack_images(pack_integration_images, display_dependencies_images, dependencies_data):
+    def organize_integration_images(pack_integration_images: list, pack_dependencies_integration_images_dict: dict,
+                                    pack_dependencies_by_download_count: list):
+        """ By Issue #32038
+        1. Sort pack integration images by alphabetical order
+        2. Sort pack dependencies by download count
+        3. Remove image duplicates
+        4. Remove deprecated integration images
+        Pack integration images are shown before pack dependencies integration images
+
+        Args:
+            pack_integration_images (list): list of pack integration images
+            pack_dependencies_integration_images_dict: a mapping of pack dependency name to its integration images
+            pack_dependencies_by_download_count: a list of pack dependencies sorted by download count
+
+        Returns:
+            list: list of sorted integration images
+
+        """
+        def sort_by_name(integration_image: dict):
+            return integration_image.get('name', '')
+
+        # sort packs integration images
+        pack_integration_images = sorted(pack_integration_images, key=sort_by_name)
+
+        # sort pack dependencies integration images
+        pack_dependencies_integration_images = []
+        for pack_name in pack_dependencies_by_download_count:
+            if pack_name in pack_dependencies_integration_images_dict:
+                logging.info(f'Adding {pack_name} to deps int imgs')
+                pack_integration_images = sorted(pack_dependencies_integration_images_dict[pack_name], key=sort_by_name)
+                pack_dependencies_integration_images += pack_integration_images
+
+        return pack_integration_images
+
+    @staticmethod
+    def _get_all_pack_images(pack_integration_images, display_dependencies_images, dependencies_data,
+                             pack_dependencies_by_download_count):
         """ Returns data of uploaded pack integration images and it's path in gcs. Pack dependencies integration images
         are added to that result as well.
 
@@ -338,11 +374,14 @@ class Pack(object):
              pack_integration_images (list): list of uploaded to gcs integration images and it paths in gcs.
              display_dependencies_images (list): list of pack names of additional dependencies images to display.
              dependencies_data (dict): all level dependencies data.
+             pack_dependencies_by_download_count (list): list of pack names that are dependencies of the given pack
+            sorted by download count.
 
         Returns:
             list: collection of integration display name and it's path in gcs.
 
         """
+        pack_dependencies_integration_images_dict = {}
         additional_dependencies_data = {k: v for (k, v) in dependencies_data.items()
                                         if k in display_dependencies_images}
 
@@ -360,9 +399,14 @@ class Pack(object):
                     continue  # skip if integration image is not part of displayed pack
 
                 if dependency_integration not in pack_integration_images:  # avoid duplicates in list
-                    pack_integration_images.append(dependency_integration)
+                    if dependency_pack_name in pack_dependencies_integration_images_dict:
+                        pack_dependencies_integration_images_dict[dependency_pack_name].append(dependency_integration)
+                    else:
+                        pack_dependencies_integration_images_dict[dependency_pack_name] = [dependency_integration]
 
-        return pack_integration_images
+        return Pack.organize_integration_images(
+            pack_integration_images, pack_dependencies_integration_images_dict, pack_dependencies_by_download_count
+        )
 
     def is_feed_pack(self, yaml_content, yaml_type):
         """
@@ -1488,21 +1532,26 @@ class Pack(object):
 
         # ===== Pack Statistics Attributes =====
         landing_page_sections = mp_statistics.StatisticsHandler.get_landing_page_sections()
+        displayed_dependencies = user_metadata.get('displayedImages', [])
         trending_packs = None
+        pack_dependencies_by_download_count = displayed_dependencies
 
         if not self._is_private_pack and statistics_handler:  # Public Content case
             self._pack_statistics_handler = mp_statistics.PackStatisticsHandler(
-                self._pack_name, statistics_handler.packs_statistics_df, index_folder_path
+                self._pack_name, statistics_handler.packs_statistics_df, statistics_handler.packs_download_count_desc,
+                displayed_dependencies
             )
             self._downloads_count = self._pack_statistics_handler.download_count
             trending_packs = statistics_handler.trending_packs
+            pack_dependencies_by_download_count = self._pack_statistics_handler.displayed_dependencies_sorted
 
         self._tags = self._collect_pack_tags(user_metadata, landing_page_sections, trending_packs)
         self._search_rank = mp_statistics.PackStatisticsHandler.calculate_search_rank(
             tags=self._tags, certification=self._certification, content_items=self._content_items
         )
         self._related_integration_images = self._get_all_pack_images(
-            integration_images, user_metadata.get('displayedImages', []), dependencies_data
+            integration_images, displayed_dependencies, dependencies_data,
+            pack_dependencies_by_download_count
         )
 
     def format_metadata(self, user_metadata, integration_images, author_image, index_folder_path,
@@ -1719,6 +1768,7 @@ class Pack(object):
             self._remove_files_list.append(temp_image_name)  # add temporary file to tracking list
             image_data['image_path'] = temp_image_path
             image_data['integration_path_basename'] = os.path.basename(pack_file_path)
+            image_data['base64'] = base64_image
 
             logging.info(f"Created temporary integration {image_data['display_name']} image for {self._pack_name} pack")
 
@@ -1846,6 +1896,7 @@ class Pack(object):
                 return integration_images  # return empty list if no images were found
 
             pack_storage_root_path = os.path.join(GCPConfig.STORAGE_BASE_PATH, self._pack_name)
+            used_base64 = []
 
             for image_data in pack_local_images:
                 image_path = image_data.get('image_path')
@@ -1872,14 +1923,17 @@ class Pack(object):
                     image_gcs_path = pack_image_blob.public_url
 
                 integration_name = image_data.get('display_name', '')
+                base64_image = image_data.get('base64')
 
                 if self.support_type != Metadata.XSOAR_SUPPORT:
                     integration_name = self.remove_contrib_suffix_from_name(integration_name)
 
-                integration_images.append({
-                    'name': integration_name,
-                    'imagePath': image_gcs_path
-                })
+                # By Issue #32038 - Remove image duplicates & deprecated integration images
+                if base64_image not in used_base64 and 'deprecated' not in integration_name.lower():
+                    integration_images.append({
+                        'name': integration_name,
+                        'imagePath': image_gcs_path
+                    })
 
             if self._uploaded_integration_images:
                 logging.info(f"Uploaded {len(self._uploaded_integration_images)} images for {self._pack_name} pack.")

@@ -980,7 +980,7 @@ def main():
                                   storage_bucket, is_private_content_updated)
 
     # initiate the statistics handler for marketplace packs
-    statistics_handler = StatisticsHandler(service_account, index_folder_path, packs_list)
+    statistics_handler = StatisticsHandler(service_account, index_folder_path)
 
     # clean index and gcs from non existing or invalid packs
     clean_non_existing_packs(index_folder_path, private_packs, storage_bucket)
@@ -999,7 +999,7 @@ def main():
             pack.cleanup()
             continue
 
-        task_status, integration_images = pack.upload_integration_images(storage_bucket, diff_files_list, True)
+        task_status, integration_images = pack.upload_integration_images(storage_bucket, diff_files_list, False)
         if not task_status:
             pack.status = PackStatus.FAILED_IMAGES_UPLOAD.name
             pack.cleanup()

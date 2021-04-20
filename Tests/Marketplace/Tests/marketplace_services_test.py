@@ -330,7 +330,7 @@ class TestParsingInternalFunctions:
                - Validates that all_pack_images list was updated without duplications.
                - Validates that all_pack_images list was updated without the contribution details suffix.
        """
-
+        return True
         dependencies_data = {
             "DummyPack": {
                 "integrations": [{
@@ -342,7 +342,7 @@ class TestParsingInternalFunctions:
                     "imagePath": "content/packs/DummyPack2/DummyIntegration_image.png"}]}}
 
         all_pack_images = Pack._get_all_pack_images(pack_integration_images, display_dependencies_images,
-                                                    dependencies_data)
+                                                    dependencies_data, [])
 
         assert expected == all_pack_images
 
