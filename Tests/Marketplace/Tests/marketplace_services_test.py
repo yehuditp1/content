@@ -950,7 +950,9 @@ class TestImagesUpload:
         temp_image_name = f'{integration_name.replace(" ", "")}_image.png'
         search_for_images_return_value = [{'display_name': integration_name,
                                            'image_path': f'/path/{temp_image_name}',
-                                           'integration_path_basename': 'fake_unified_integration_path'}]
+                                           'integration_path_basename': 'fake_unified_integration_path',
+                                           'base64': '',
+                                           'is_integration_deprecated': False}]
         mocker.patch("marketplace_services_test.Pack._search_for_images", return_value=search_for_images_return_value)
         mocker.patch("marketplace_services_test.Pack.need_to_upload_integration_image", return_value=True)
         mocker.patch('builtins.open', mock_open(read_data="image_data"))
@@ -985,7 +987,9 @@ class TestImagesUpload:
         temp_image_name = f'{integration_name.replace(" ", "")}_image.png'
         search_for_images_return_value = [{'display_name': integration_name,
                                            'image_path': f'/path/{temp_image_name}',
-                                           'integration_path_basename': 'fake_unified_integration_path'}]
+                                           'integration_path_basename': 'fake_unified_integration_path',
+                                           'base64': '',
+                                           'is_integration_deprecated': False}]
         mocker.patch("marketplace_services_test.Pack._search_for_images", return_value=search_for_images_return_value)
         mocker.patch("marketplace_services_test.Pack.need_to_upload_integration_image", return_value=True)
         mocker.patch("builtins.open", mock_open(read_data="image_data"))

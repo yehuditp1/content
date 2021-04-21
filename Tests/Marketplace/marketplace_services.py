@@ -348,6 +348,7 @@ class Pack(object):
             list: list of sorted integration images
 
         """
+
         def sort_by_name(integration_image: dict):
             return integration_image.get('name', '')
 
@@ -355,12 +356,14 @@ class Pack(object):
         pack_integration_images = sorted(pack_integration_images, key=sort_by_name)
 
         # sort pack dependencies integration images
-        pack_dependencies_integration_images = []
-        for pack_name in pack_dependencies_by_download_count:
-            if pack_name in pack_dependencies_integration_images_dict:
-                logging.info(f'Adding {pack_name} to deps int imgs')
-                pack_integration_images = sorted(pack_dependencies_integration_images_dict[pack_name], key=sort_by_name)
-                pack_dependencies_integration_images += pack_integration_images
+        all_dep_int_imgs = []
+        for dep_pack_name in pack_dependencies_by_download_count:
+            if dep_pack_name in pack_dependencies_integration_images_dict:
+                logging.info(f'Adding {dep_pack_name} to deps int imgs')
+                dep_int_imgs = sorted(pack_dependencies_integration_images_dict[dep_pack_name], key=sort_by_name)
+                for dep_int_img in dep_int_imgs:
+                    if dep_int_img not in all_dep_int_imgs:  # avoid duplicates
+                        all_dep_int_imgs.append(dep_int_img)
 
         return pack_integration_images
 
@@ -381,31 +384,26 @@ class Pack(object):
             list: collection of integration display name and it's path in gcs.
 
         """
-        pack_dependencies_integration_images_dict = {}
-        additional_dependencies_data = {k: v for (k, v) in dependencies_data.items()
-                                        if k in display_dependencies_images}
+        dependencies_integration_images_dict = {}
+        additional_dependencies_data = {k: v for k, v in dependencies_data.items() if k in display_dependencies_images}
 
         for dependency_data in additional_dependencies_data.values():
-            dependency_integration_images = dependency_data.get('integrations', [])
+            for dep_int_img in dependency_data.get('integrations', []):
+                dep_int_img_gcs_path = dep_int_img.get('imagePath', '')  # image public url
+                dep_int_img['name'] = Pack.remove_contrib_suffix_from_name(dep_int_img.get('name', ''))
+                dep_pack_name = os.path.basename(os.path.dirname(dep_int_img_gcs_path))
 
-            for dependency_integration in dependency_integration_images:
-                dependency_integration_gcs_path = dependency_integration.get('imagePath', '')  # image public url
-                dependency_integration['name'] = Pack.remove_contrib_suffix_from_name(
-                    dependency_integration.get('name', ''))
-                dependency_pack_name = os.path.basename(
-                    os.path.dirname(dependency_integration_gcs_path))  # extract pack name from public url
+                if dep_pack_name not in display_dependencies_images:
+                    continue  # skip if integration image is not part of displayed images of the given pack
 
-                if dependency_pack_name not in display_dependencies_images:
-                    continue  # skip if integration image is not part of displayed pack
-
-                if dependency_integration not in pack_integration_images:  # avoid duplicates in list
-                    if dependency_pack_name in pack_dependencies_integration_images_dict:
-                        pack_dependencies_integration_images_dict[dependency_pack_name].append(dependency_integration)
+                if dep_int_img not in pack_integration_images:  # avoid duplicates in list
+                    if dep_pack_name in dependencies_integration_images_dict:
+                        dependencies_integration_images_dict[dep_pack_name].append(dep_int_img)
                     else:
-                        pack_dependencies_integration_images_dict[dependency_pack_name] = [dependency_integration]
+                        dependencies_integration_images_dict[dep_pack_name] = [dep_int_img]
 
         return Pack.organize_integration_images(
-            pack_integration_images, pack_dependencies_integration_images_dict, pack_dependencies_by_download_count
+            pack_integration_images, dependencies_integration_images_dict, pack_dependencies_by_download_count
         )
 
     def is_feed_pack(self, yaml_content, yaml_type):
@@ -1753,6 +1751,9 @@ class Pack(object):
             image_data['display_name'] = integration_yml.get('display', '')
             # create temporary file of base64 decoded data
             integration_name = integration_yml.get('name', '')
+            is_integration_deprecated = any(
+                [get_valid_bool(integration_yml.get('deprecated', False)), 'deprecated' in integration_name.lower()]
+            )
             base64_image = integration_yml['image'].split(',')[1] if integration_yml.get('image') else None
 
             if not base64_image:
@@ -1769,6 +1770,7 @@ class Pack(object):
             image_data['image_path'] = temp_image_path
             image_data['integration_path_basename'] = os.path.basename(pack_file_path)
             image_data['base64'] = base64_image
+            image_data['is_integration_deprecated'] = is_integration_deprecated
 
             logging.info(f"Created temporary integration {image_data['display_name']} image for {self._pack_name} pack")
 
@@ -1924,12 +1926,14 @@ class Pack(object):
 
                 integration_name = image_data.get('display_name', '')
                 base64_image = image_data.get('base64')
+                is_integration_deprecated = image_data['is_integration_deprecated']
 
                 if self.support_type != Metadata.XSOAR_SUPPORT:
                     integration_name = self.remove_contrib_suffix_from_name(integration_name)
 
                 # By Issue #32038 - Remove image duplicates & deprecated integration images
-                if base64_image not in used_base64 and 'deprecated' not in integration_name.lower():
+                if base64_image not in used_base64 and not is_integration_deprecated:
+                    used_base64.append(base64_image)
                     integration_images.append({
                         'name': integration_name,
                         'imagePath': image_gcs_path
