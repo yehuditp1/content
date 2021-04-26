@@ -1090,6 +1090,53 @@ def update_remote_system_command(args, params, service, auth_token):
 
     return notable_id
 
+# =========== Real-Time fetch ===========
+
+
+def item_to_incident(item):
+    return Notable(data=item).to_incident()
+
+
+def get_reader(stream):
+    return results.ResultsReader(io.BufferedReader(ResponseReaderWrapper(stream)))
+
+
+def splunk_realtime(service, query):
+    job_kwargs = {"search_mode": "realtime",
+                  "latest_time": "rt",
+                  "earliest_time": "rt"}
+
+    try:
+        for item in filter(lambda x: not isinstance(x, results.Message), get_reader(service.jobs.export(query, **job_kwargs))):
+            yield item
+    except Exception as error:
+        return_error(str(error), error)
+
+
+def get_splunk_query(demisto_params):
+    search_query = [demisto_params.get('fetchQuery', '')]
+    extract_fields = demisto_params.get('extractFields', '')
+    if extract_fields:
+        for field in extract_fields.split(','):
+            field_trimmed = field.strip()
+            if field_trimmed:
+                search_query.append('{}={}'.format(field_trimmed, field_trimmed))
+    return ' | eval '.join(search_query)
+
+
+def real_time_search(service):
+    sec_sleep = int(FETCH_LIMIT/60)
+    search_query = get_splunk_query(demisto.params())
+    incident = [None]
+    while True:
+        for item in splunk_realtime(service, search_query):
+            incident[0] = item_to_incident(item)
+            try:
+                demisto.createIncidents(incident)
+            except Exception as error:
+                return_error(str(error), error)
+            time.sleep(sec_sleep)
+
 
 # =========== Mirroring Mechanism ===========
 
@@ -2175,8 +2222,9 @@ def main():
     if service is None:
         demisto.error("Could not connect to SplunkPy")
 
-    # The command command holds the command sent from the user.
-    if command == 'test-module':
+    if demisto.command() == 'long-running-execution':
+        real_time_search(service)
+    elif command == 'test-module':
         test_module(service)
         demisto.results('ok')
     elif command == 'splunk-reset-enriching-fetch-mechanism':
