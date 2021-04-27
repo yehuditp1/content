@@ -1828,9 +1828,11 @@ class Pack(object):
             if detect_changes:
                 # detect added/modified integration images
                 for file in diff_files_list:
+                    logging.info(file.a_path)
                     if self.is_integration_image(file.a_path):
                         # integration dir name will show up in the unified integration file path in content_packs.zip
                         integration_dirs.append(os.path.basename(os.path.dirname(file.a_path)))
+                        logging.info(file.a_path)
                     elif self.is_unified_integration(file.a_path):
                         # if the file found in the diff is a unified integration we upload its image
                         unified_integrations.append(os.path.basename(file.a_path))
