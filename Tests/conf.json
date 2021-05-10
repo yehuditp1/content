@@ -3293,6 +3293,10 @@
             ],
             "fromversion": "6.0.0",
             "nightly": true
+        },
+        {
+            "integrations": "ThreatExchange v2",
+            "playbookID": "ThreatExchangeV2-test"
         }
     ],
     "skipped_tests": {
