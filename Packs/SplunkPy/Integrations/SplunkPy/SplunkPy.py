@@ -43,6 +43,7 @@ MIRROR_DIRECTION = {
     'Outgoing': 'Out',
     'Incoming And Outgoing': 'Both'
 }
+MIRRORED_FIELDS = ['comment', 'status', 'owner', 'urgency']
 
 # =========== Enrichment Mechanism Globals ===========
 ENABLED_ENRICHMENTS = params.get('enabled_enrichments', [])
@@ -1006,8 +1007,9 @@ def get_remote_data_command(service, args, close_incident):
             'ContentsFormat': EntryFormat.JSON
         })
 
+    delta = {field: updated_notable.get(field, '') for field in MIRRORED_FIELDS}
     demisto.debug('Updated notable {}'.format(notable_id))
-    return_results(GetRemoteDataResponse(mirrored_object=updated_notable, entries=entries))
+    return_results(GetRemoteDataResponse(mirrored_object=delta, entries=entries))
 
 
 def get_modified_remote_data_command(service, args):
@@ -1056,9 +1058,9 @@ def update_remote_system_command(args, params, service, auth_token):
     if parsed_args.incident_changed and delta:
         demisto.debug('Got the following delta keys {} to update incident corresponding to notable '
                       '{}'.format(str(list(delta.keys())), notable_id))
-        changed_data = {'comment': None, 'status': None, 'owner': None, 'urgency': None}
+        changed_data = {field: None for field in MIRRORED_FIELDS}
         for field in delta:
-            if field in ('comment', 'status', 'owner', 'urgency'):
+            if field in MIRRORED_FIELDS:
                 changed_data[field] = delta[field]
 
         # Close notable if relevant
